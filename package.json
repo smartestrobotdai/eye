@@ -1,0 +1,21 @@
+{
+  "name": "eye",
+  "version": "1.0.0",
+  "description": "",
+  "main": "test.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "install-selenium": "selenium-standalone install",
+    "start-selenium": "selenium-standalone start",
+    "start": "node test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "webdriverio": "^5.10.9"
+  },
+  "devDependencies": {
+    "selenium-standalone": "^6.16.0"
+  }
+}
