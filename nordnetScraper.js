@@ -1,8 +1,11 @@
 const { remote } = require('webdriverio')
 const moment = require('moment-timezone')
+const NATS = require('nats');
+
+
 
 const snooze = ms => new Promise(resolve => setTimeout(resolve, ms));
-
+const natsAddress = 'nats://localhost:4222'
 
 function getDateString(date) {
   return `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()}`
@@ -45,12 +48,35 @@ function fetchContent() {
 
     console.log(result)
     if (result.time === expectedTimestamp) {
-      break
+      return result
     }
   }
+
+  return null
+}
+
+function publish(nc, subject, msg) {
+  return new Promise(resolve => {
+    nc.publish(subject, msg, function() {
+        console.log('Published [' + subject + '] : "' + msg + '"');
+        resolve()
+    });
+
+  })
+
 }
 
 (async () => {
+  console.log(`Connecting to NATS: ${natsAddress}`)
+  const nc = NATS.connect({url: natsAddress})
+
+  nc.on('error', function(e) {
+      console.log('Error [' + nc.currentServer + ']: ' + e);
+      process.exit();
+  })
+
+  // await publish(nc, '101', 'mytest')
+
   // get current time, active trade is between 9:00 to 17:29
   const browser = await remote({
     logLevel: 'trace',
@@ -85,7 +111,8 @@ function fetchContent() {
     await snooze(msLeft)
 
     if (toFetch) {
-      fetchContent()
+      result = fetchContent()
+      result && await publish(nc, '101', JSON.stringify(result))
     }
   }
   
