@@ -17,6 +17,10 @@ function shouldFetch(date) {
   const curDate = moment.tz('Europe/Stockholm')
   const hour = curDate.hour()
   const minute = curDate.minute()
+  const weekday = curDate.weekday()
+  if (weekday < 1 || weekday > 5) {
+    return false
+  }
   // continuous bid time
   if (inTimeRange(hour, minute, 8, 59, 17, 24)) {
     return true
@@ -37,19 +41,24 @@ function inTimeRange(curHour, curMinute, startHour, startMinute, endHour, endMin
 }
 
 
-function fetchContent() {
+async function fetchContent(browser, curDate) {
   let retries = 0
   while (retries < 3) {
     const dateString = getDateString(curDate)
-    const result = browser.executeAsync(function(dateString, done) {
+    const result = await browser.executeAsync(function(dateString, done) {
       let url = `https://www.nordnet.se/graph/instrument/11/101?from=${dateString}&to=${dateString}&fields=last,open,high,low,volume`
       fetch(url).then((resp) => resp.json()).then(allTicks => allTicks[allTicks.length-1]).then(done)
     }, dateString)
 
     console.log(result)
     if (result.time === expectedTimestamp) {
+      console.log(`got data with timestamp:${result.time} successfully`)
       return result
+    } else {
+      console.log(`expected: ${expectedTimestamp}, actual: ${result.time}`)
+
     }
+    retries += 1
   }
 
   return null
@@ -88,10 +97,8 @@ function publish(nc, subject, msg) {
   await browser.url('https://www.nordnet.se/mux/web/nordnet/index.html')
 
   const inputElem = await browser.$('a.btn-primary')
-  console.log(inputElem)
   await inputElem.click()
   const loginButton = await browser.$('button.button.link')
-  console.log(loginButton)
   await loginButton.click()
   
   const username = await browser.$('#username')
@@ -111,7 +118,7 @@ function publish(nc, subject, msg) {
     await snooze(msLeft)
 
     if (toFetch) {
-      result = fetchContent()
+      result = await fetchContent(browser, curDate)
       result && await publish(nc, '101', JSON.stringify(result))
     }
   }
