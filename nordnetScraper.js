@@ -41,27 +41,41 @@ function inTimeRange(curHour, curMinute, startHour, startMinute, endHour, endMin
 }
 
 
-async function fetchContent(browser, curDate) {
+function findIndexByTimestamp(results, timestamp) {
+  for (let i=results.length-1; i>0; i--) {
+    if (results[i].time === timestamp) {
+      return i
+    }
+  }
+  return null
+}
+
+async function fetchContent(browser, lastTimestamp) {
+  let maxRetries = 10000
   let retries = 0
-  while (retries < 3) {
-    const dateString = getDateString(curDate)
-    const result = await browser.executeAsync(function(dateString, done) {
+
+  while (retries < maxRetries) {
+    const dateString = getDateString(new Date())
+    const results = await browser.executeAsync(function(dateString, done) {
       let url = `https://www.nordnet.se/graph/instrument/11/101?from=${dateString}&to=${dateString}&fields=last,open,high,low,volume`
-      fetch(url).then((resp) => resp.json()).then(allTicks => allTicks[allTicks.length-1]).then(done)
+      fetch(url).then((resp) => resp.json()).then(done)
     }, dateString)
 
-    console.log(result)
-    if (result.time === expectedTimestamp) {
-      console.log(`got data with timestamp:${result.time} successfully`)
-      return result
-    } else {
-      console.log(`expected: ${expectedTimestamp}, actual: ${result.time}`)
+    const lastResult = results[results.length-1]
 
+    if (lastResult.time !== lastTimestamp) {
+      console.log(`new timestamp:${lastResult.time}, last timestamp:${lastTimestamp}`)
+      let lastIndex = findIndexByTimestamp(results, lastTimestamp)
+      console.log('lastIndex.' + lastIndex)
+      let freshData = (retries > 0)
+      return {results: results.slice(lastIndex+1), lastTimestamp:lastResult.time, freshData}
     }
+
+    await snooze(100)
     retries += 1
   }
 
-  return null
+  return null, lastTimestamp
 }
 
 function publish(nc, subject, msg) {
@@ -88,7 +102,7 @@ function publish(nc, subject, msg) {
 
   // get current time, active trade is between 9:00 to 17:29
   const browser = await remote({
-    logLevel: 'trace',
+    logLevel: 'warn',
     capabilities: {
       browserName: 'chrome'
     }
@@ -109,18 +123,33 @@ function publish(nc, subject, msg) {
 
   const login = await browser.$('button.button.primary.block')
   await login.click()
+
+
+  let lastTimestamp = null
   while (true) {
     const curDate = new Date()
     const toFetch = shouldFetch(curDate)
-    const msLeft = 60000 - curDate.getTime() % 60000
-    expectedTimestamp = curDate.getTime()+msLeft
-    console.log(`next tick: ${expectedTimestamp}, toFetch: ${toFetch}`)
-    await snooze(msLeft)
 
-    if (toFetch) {
-      result = await fetchContent(browser, curDate)
-      result && await publish(nc, '101', JSON.stringify(result))
+    if (toFetch === false) {
+      snooze(60000)
+      continue
     }
+
+    let obj = await fetchContent(browser, lastTimestamp)
+    lastTimestamp = obj.lastTimestamp
+    results = obj.results
+
+    console.log('Got results:')
+    console.log(results)
+    console.log(obj.freshData)
+
+    if (obj.freshData === true) {
+      await snooze(55000)  
+    } else {
+      await snooze(1000)
+    }
+    
+    results && await publish(nc, 'instument-101', JSON.stringify(results))
   }
   
   await browser.deleteSession()
