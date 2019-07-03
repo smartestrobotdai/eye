@@ -1,7 +1,7 @@
 const { remote } = require('webdriverio')
 const moment = require('moment-timezone')
 const NATS = require('nats');
-
+const {nordnetLogin} = require('./util')
 
 
 const snooze = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -108,21 +108,8 @@ function publish(nc, subject, msg) {
     }
   })
 
-  await browser.url('https://www.nordnet.se/mux/web/nordnet/index.html')
-
-  const inputElem = await browser.$('a.btn-primary')
-  await inputElem.click()
-  const loginButton = await browser.$('button.button.link')
-  await loginButton.click()
-  
-  const username = await browser.$('#username')
-  await username.setValue('magicinvest')
-
-  const password = await browser.$('#password')
-  await password.setValue('ken@Ericss0n')
-
-  const login = await browser.$('button.button.primary.block')
-  await login.click()
+  await nordnetLogin(browser)
+  await snooze(3000)
 
 
   let lastTimestamp = null
@@ -131,7 +118,7 @@ function publish(nc, subject, msg) {
     const toFetch = shouldFetch(curDate)
 
     if (toFetch === false) {
-      snooze(60000)
+      await snooze(60000)
       continue
     }
 
@@ -143,13 +130,15 @@ function publish(nc, subject, msg) {
     console.log(results)
     console.log(obj.freshData)
 
+    results && await publish(nc, 'instument-101', JSON.stringify(results))
+
     if (obj.freshData === true) {
       await snooze(55000)  
     } else {
       await snooze(1000)
     }
     
-    results && await publish(nc, 'instument-101', JSON.stringify(results))
+    
   }
   
   await browser.deleteSession()
