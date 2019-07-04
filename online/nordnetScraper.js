@@ -1,17 +1,15 @@
 const { remote } = require('webdriverio')
 const moment = require('moment-timezone')
 const NATS = require('nats');
-const {nordnetLogin} = require('./util')
-
+const {nordnetLogin} = require('../util')
 
 const snooze = ms => new Promise(resolve => setTimeout(resolve, ms));
 const natsAddress = 'nats://localhost:4222'
+const stock_ids = [992]
 
 function getDateString(date) {
   return `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()}`
 }
-
-const TIME_TYPE_CONTINUOUS_BID = 1
 
 function shouldFetch(date) {
   const curDate = moment.tz('Europe/Stockholm')
@@ -50,16 +48,15 @@ function findIndexByTimestamp(results, timestamp) {
   return null
 }
 
-async function fetchContent(browser, lastTimestamp) {
+async function fetchContent(browser, url, lastTimestamp) {
   let maxRetries = 10000
   let retries = 0
 
   while (retries < maxRetries) {
     const dateString = getDateString(new Date())
-    const results = await browser.executeAsync(function(dateString, done) {
-      let url = `https://www.nordnet.se/graph/instrument/11/101?from=${dateString}&to=${dateString}&fields=last,open,high,low,volume`
+    const results = await browser.executeAsync(function(url, done) {
       fetch(url).then((resp) => resp.json()).then(done)
-    }, dateString)
+    }, url)
 
     const lastResult = results[results.length-1]
 
@@ -84,9 +81,7 @@ function publish(nc, subject, msg) {
         console.log('Published [' + subject + '] : "' + msg + '"');
         resolve()
     });
-
   })
-
 }
 
 (async () => {
@@ -112,7 +107,10 @@ function publish(nc, subject, msg) {
   await snooze(3000)
 
 
-  let lastTimestamp = null
+  let lastTimestampOmxs = null
+  let lastTimestampStocks = []
+  stock_ids.forEach(stock_id=>lastTimestampStocks.push(null))
+
   while (true) {
     const curDate = new Date()
     const toFetch = shouldFetch(curDate)
@@ -122,25 +120,44 @@ function publish(nc, subject, msg) {
       continue
     }
 
-    let obj = await fetchContent(browser, lastTimestamp)
+    const dateString = getDateString(new Date())
+    console.log('Starting to fetch OMXS30 indicator...')
+    let url = getDataUrl(0, dateString, dateString)
+    let obj = await fetchContent(browser, url, lastTimestamp)
     lastTimestamp = obj.lastTimestamp
-    results = obj.results
+    let results = obj.results
+    let freshData = obj.freshData
 
-    console.log('Got results:')
+    console.log('fetched new OMXS30 indicator results:')
     console.log(results)
-    console.log(obj.freshData)
+    console.log(freshData)
 
-    results && await publish(nc, 'instument-101', JSON.stringify(results))
+    // write to DB
+    let count = await insertRecords(0, results)
+    console.log(`minute data for OMXS30 indicator finished, ${count} records were inserted`)
 
-    if (obj.freshData === true) {
-      await snooze(55000)  
+    // fetch stock data
+    stock_ids.forEach(async function(stock_id, index) {
+      console.log(`Starting to fetch stock_id: ${stock_id}...`)
+      let url = getDataUrl(stock_id, dateString, dateString)
+      let obj = await fetchContent(browser, url, lastTimestampStocks[index])
+      lastTimestampStocks[index] = obj.lastTimestamp
+      let results = obj.results
+
+      // push to NATS
+      results && await publish(nc, 'instument-{}'.format(stock_id), JSON.stringify(results))
+
+      // write to DB
+      let count = await insertRecords(stock_id, results)
+      console.log(`minute data for stock_id: ${stock_id} finished, ${count} records were inserted`)
+    })
+
+    if (freshData === true) {
+      await snooze(55000)
     } else {
       await snooze(1000)
     }
-    
-    
   }
-  
   await browser.deleteSession()
 })().catch((e) => console.error(e))
 
