@@ -32,7 +32,7 @@ sleep 5
 echo "`date` started fetching data"
 echo "node version: `node -v`"
 sleep 10
-cd data-sink/
+cd $DIR
 node daily.js
 node minute.js
 if [ $? -ne 0 ]; then
