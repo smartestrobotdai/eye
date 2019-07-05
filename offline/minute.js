@@ -6,7 +6,8 @@ const {isWorkingDay,
   fetch, 
   executingWrite,
   getDataUrl,
-  getCompletedRecord} = require('../util')
+  getCompletedRecord,
+  insertRecords} = require('../util')
 
 async function checkData() {
   let res = await executeQuery(client, 'SELECT a.stock_id, a.stock_name, MAX(extract(epoch from time_stamp)) as time_stamp FROM stocks a \
@@ -20,7 +21,7 @@ async function checkData() {
       console.log(`No data fetched for stock: ${stock_name}:${stock_id}`)
       continue
     }
-    let count = await insertRecords(stock_id, results)
+    let count = await insertRecords(client, stock_id, results)
     console.log(`minute data for stock: ${stock_name}: ${stock_id} finished, ${count} records were inserted`)
   }
   return Promise.resolve()

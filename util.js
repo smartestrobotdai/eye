@@ -97,7 +97,7 @@ async function executingWrite(client, sql, value) {
 }
 
 
-async function insertRecords(stockId, records) {
+async function insertRecords(client, stockId, records) {
   let count = 0
   records.forEach(async function(record) {
     let {time, open, high, low, last, volume} = getCompletedRecord(record)
