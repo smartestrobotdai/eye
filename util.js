@@ -44,7 +44,7 @@ async function fetch(url) {
         }
       })
     }).on("error", (err) => {
-      console.log("Error: " + err.message + " " + data);
+      console.log("Error: " + err.message);
       reject()
     })
   })

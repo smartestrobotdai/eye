@@ -5,7 +5,7 @@ const {nordnetLogin} = require('../util')
 
 const snooze = ms => new Promise(resolve => setTimeout(resolve, ms));
 const natsAddress = 'nats://localhost:4222'
-const stock_ids = [992]
+const stock_ids = [3524, 160271]
 
 function getDateString(date) {
   return `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()}`
