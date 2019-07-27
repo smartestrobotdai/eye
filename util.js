@@ -64,7 +64,7 @@ function getCompletedRecord(record) {
 
 function getDataUrl(stockId, from, to) {
   url = ''
-  if (stockId === '0') {
+  if (stockId === 0) {
     url = `https://www.nordnet.se/graph/indicator/SSE/OMXSPI?from=${from}&to=${to}&fields=last,open,high,low`
   } else {
     url = `https://www.nordnet.se/graph/instrument/11/${stockId}?from=${from}&to=${to}&fields=last,open,high,low,volume`

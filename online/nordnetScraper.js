@@ -1,7 +1,7 @@
 const { remote } = require('webdriverio')
 const moment = require('moment-timezone')
 const NATS = require('nats');
-const {nordnetLogin} = require('../util')
+const {nordnetLogin, getDataUrl, insertRecords} = require('../util')
 
 const snooze = ms => new Promise(resolve => setTimeout(resolve, ms));
 const natsAddress = 'nats://localhost:4222'
@@ -123,8 +123,8 @@ function publish(nc, subject, msg) {
     const dateString = getDateString(new Date())
     console.log('Starting to fetch OMXS30 indicator...')
     let url = getDataUrl(0, dateString, dateString)
-    let obj = await fetchContent(browser, url, lastTimestamp)
-    lastTimestamp = obj.lastTimestamp
+    let obj = await fetchContent(browser, url, lastTimestampOmxs)
+    lastTimestampOmxs = obj.lastTimestamp
     let results = obj.results
     let freshData = obj.freshData
 
@@ -133,8 +133,8 @@ function publish(nc, subject, msg) {
     console.log(freshData)
 
     // write to DB
-    let count = await insertRecords(0, results)
-    console.log(`minute data for OMXS30 indicator finished, ${count} records were inserted`)
+    // let count = await insertRecords(0, results)
+    // console.log(`minute data for OMXS30 indicator finished, ${count} records were inserted`)
 
     // fetch stock data
     stock_ids.forEach(async function(stock_id, index) {
@@ -145,11 +145,12 @@ function publish(nc, subject, msg) {
       let results = obj.results
 
       // push to NATS
-      results && await publish(nc, 'instument-{}'.format(stock_id), JSON.stringify(results))
+      results && await publish(nc, `instument.${stock_id}`, JSON.stringify(results))
 
       // write to DB
-      let count = await insertRecords(stock_id, results)
-      console.log(`minute data for stock_id: ${stock_id} finished, ${count} records were inserted`)
+      //let count = await insertRecords(stock_id, results)
+      console.log(`minute data for stock_id: ${stock_id} finished`)
+      //console.log(`minute data for stock_id: ${stock_id} finished, ${count} records were inserted`)
     })
 
     if (freshData === true) {
